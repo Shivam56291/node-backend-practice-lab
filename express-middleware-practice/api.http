@@ -1,0 +1,10 @@
+### GET /
+http://localhost:3000
+
+
+### GET /users
+http://localhost:3000/users
+
+
+### GET /admin
+http://localhost:3000/admin
