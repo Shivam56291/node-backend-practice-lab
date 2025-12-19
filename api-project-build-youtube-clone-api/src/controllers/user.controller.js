@@ -5,6 +5,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const fs = require("fs/promises");
 const { uploadToCloudinary } = require("../utils/cloudinary");
 const appConfig = require("../config/appConfig");
+const jwt = require("jsonwebtoken");
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -25,7 +26,6 @@ const cookieOptions = {
   sameSite: "strict",
   path: "/", // crucial for clearing cookies
 };
-
 
 //!@Desc: Register a new user with optional avatar and cover image
 //!@Route: Post /api/v1/users/register
@@ -171,23 +171,86 @@ const logoutUser = asyncHandler(async (req, res) => {
 //!@Access Private
 const refreshAccessToken = asyncHandler(async (req, res) => {
   try {
-  } catch (error) {}
+    // Get refresh token from cookies or body
+    const incomingRefreshToken =
+      req?.cookies?.refreshToken || req.body.refreshToken;
+
+    if (!incomingRefreshToken) {
+      throw new ApiError(401, "Refresh token is required");
+    }
+    //Verify the refresh token
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      appConfig.refreshTokenSecret
+    );
+    //Find the user with ths refresh token
+    const user = await User.findById(decodedToken._id);
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+    if (incomingRefreshToken !== user.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+    //Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateAccessAndRefreshTokens(user?._id);
+    //Set cookies
+    const cookieOptions = {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: appConfig.nodeEnv === "production",
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", newRefreshToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            accessToken,
+            refreshToken: newRefreshToken,
+          },
+          "Access token refreshed successfully"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid Refresh token");
+  }
 });
 
 //!@Desc: Change user password
 //!@Route: Post /api/v1/users/change-password
 //!@Access Private
 const changePassword = asyncHandler(async (req, res) => {
-  try {
-  } catch (error) {}
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    throw new ApiError(400, "Old password and new password are required");
+  }
+  //Find the user with password
+  const user = await User.findById(req.user._id);
+  //Check if old password is correct
+  const isPasswordValid = await user.isPasswordCorrect(oldPassword);
+  if (!isPasswordValid) {
+    throw new ApiError(400, "Invalid Old password ");
+  }
+  //Update password
+  user.password = newPassword;
+
+  await user.save({ validateBeforeSave: false });
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
 //!@Desc: Get current user's profile
 //!@Route: Get /api/v1/users/current
 //!@Access Private
 const getCurrentUser = asyncHandler(async (req, res) => {
-  try {
-  } catch (error) {}
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
 });
 
 //!@Desc: Update current user's profile
