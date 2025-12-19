@@ -14,6 +14,7 @@ const appConfig = {
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
+  uploadPath: process.env.UPLOAD_PATH,
 };
 
 module.exports = appConfig;

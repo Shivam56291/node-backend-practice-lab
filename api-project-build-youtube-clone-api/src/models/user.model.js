@@ -1,4 +1,7 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const appConfig = require("../config/appConfig");
 
 const userSchema = new mongoose.Schema(
   {
@@ -32,11 +35,11 @@ const userSchema = new mongoose.Schema(
        PROFILE MEDIA
     ========================== */
     avatar: {
-      publicId: String,
+      public_id: String,
       url: String,
     },
     coverImage: {
-      publicId: String,
+      public_id: String,
       url: String,
     },
 
@@ -121,6 +124,43 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.pre("save", async function () {
+  if (this.isModified("password")) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+});
+
+userSchema.methods.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+userSchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      email: this.email,
+      username: this.username,
+      fullName: this.fullName,
+    },
+    appConfig.accessTokenSecret,
+    {
+      expiresIn: appConfig.accessTokenExpiry,
+    }
+  );
+};
+
+userSchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+    },
+    appConfig.refreshTokenSecret,
+    {
+      expiresIn: appConfig.refreshTokenExpiry,
+    }
+  );
+};
 
 const User = mongoose.model("User", userSchema);
 
