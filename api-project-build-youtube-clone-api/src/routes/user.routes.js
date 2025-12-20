@@ -50,7 +50,7 @@ userRouter.post("/reset-password", verifyJWT, resetPassword);
    USER PROFILE (PRIVATE)
 ===================================================== */
 userRouter.get("/current-user", verifyJWT, getCurrentUser);
-userRouter.put("/update-account", verifyJWT, updateAccountDetails);
+userRouter.patch("/update-account", verifyJWT, updateAccountDetails);
 
 userRouter.patch("/avatar", verifyJWT, upload.single("avatar"), updateAvatar);
 

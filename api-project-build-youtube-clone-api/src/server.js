@@ -3,6 +3,7 @@ const express = require("express");
 const connectDB = require("./config/db");
 const appConfig = require("./config/appConfig");
 const userRouter = require("./routes/user.routes");
+const channelRouter = require("./routes/channel.routes");
 const cookieParser = require("cookie-parser");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
 
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/channels", channelRouter);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -3,7 +3,10 @@ const asyncHandler = require("../utils/asyncHandler");
 const User = require("../models/user.model");
 const ApiResponse = require("../utils/ApiResponse");
 const fs = require("fs/promises");
-const { uploadToCloudinary } = require("../utils/cloudinary");
+const {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+} = require("../utils/cloudinary");
 const appConfig = require("../config/appConfig");
 const jwt = require("jsonwebtoken");
 
@@ -24,7 +27,7 @@ const cookieOptions = {
   httpOnly: true,
   secure: appConfig.nodeEnv === "production",
   sameSite: "strict",
-  path: "/", // crucial for clearing cookies
+  path: "/",
 };
 
 //!@Desc: Register a new user with optional avatar and cover image
@@ -158,8 +161,13 @@ const logoutUser = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  res.clearCookie("accessToken", cookieOptions);
-  res.clearCookie("refreshToken", cookieOptions);
+  const logoutCookieOptions = {
+    ...cookieOptions,
+    maxAge: 0,
+  };
+
+  res.clearCookie("accessToken", logoutCookieOptions);
+  res.clearCookie("refreshToken", logoutCookieOptions);
 
   return res
     .status(200)
@@ -257,24 +265,108 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 //!@Route: Put /api/v1/users/current
 //!@Access Private
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  try {
-  } catch (error) {}
+  const { fullName, email } = req.body;
+  if (!fullName && !email) {
+    throw new ApiError(400, "At least one field is required");
+  }
+  //Update user
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        fullName: fullName || req.user.fullName,
+        email: email || req.user.email,
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account details updated successfully"));
 });
 
 //!@Desc: Update current user's avatar
 //!@Route: Patch /api/v1/users/avatar
 //!@Access Private
 const updateAvatar = asyncHandler(async (req, res) => {
-  try {
-  } catch (error) {}
+  //Get avatar file
+  const avatarLocalPath = req.file.path;
+  if (!avatarLocalPath) {
+    throw new ApiError(400, "Avatar file is required");
+  }
+  //get current user
+  const user = await User.findById(req.user._id);
+  //Delete old avatar
+  if (user?.avatar?.public_id) {
+    await deleteFromCloudinary(user?.avatar?.public_id);
+  }
+  //Upload new Avatar
+  const uploadResult = await uploadToCloudinary(
+    avatarLocalPath,
+    "youtube/avatars"
+  );
+  if (!uploadResult) {
+    throw new ApiError(500, "Error uploading avatar");
+  }
+  //Update the user
+  const updatedUser = await User.findByIdAndUpdate(
+    req?.user?._id,
+    {
+      $set: {
+        avatar: {
+          public_id: uploadResult.public_id,
+          url: uploadResult.secure_url,
+        },
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, "Avatar updated"));
 });
 
 //!@Desc: Update current user's cover image
 //!@Route: Patch /api/v1/users/cover-image
 //!@Access Private
 const updateCoverImage = asyncHandler(async (req, res) => {
-  try {
-  } catch (error) {}
+  //Get cover image file
+  const coverImageLocalPath = req.file.path;
+  if (!coverImageLocalPath) {
+    throw new ApiError(400, "Cover image file is required");
+  }
+  //get current user
+  const user = await User.findById(req.user._id);
+  //Delete old avatar
+  if (user?.coverImage?.public_id) {
+    await deleteFromCloudinary(user?.coverImage?.public_id);
+  }
+  //Upload new Cover Image
+  const uploadResult = await uploadToCloudinary(
+    coverImageLocalPath,
+    "youtube/coverImages"
+  );
+  if (!uploadResult) {
+    throw new ApiError(500, "Error uploading Cover Image");
+  }
+  //Update the user
+  const updatedUser = await User.findByIdAndUpdate(
+    req?.user?._id,
+    {
+      $set: {
+        coverImage: {
+          public_id: uploadResult.public_id,
+          url: uploadResult.secure_url,
+        },
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, "Cover image updated"));
 });
 
 //!@Desc: Get user channel profile
